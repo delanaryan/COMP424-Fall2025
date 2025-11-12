@@ -47,6 +47,11 @@ class StudentAgent(Agent):
     # Returning a random valid move as an example
     #return random_move(chess_board,player)
     # Get all legal moves for the current player
+
+    ################################################
+    # Alpha-Beta Pruning with Heuristic Evaluation #
+    ################################################
+    
     legal_moves = get_valid_moves(chess_board, player)
 
     if not legal_moves:
@@ -71,7 +76,23 @@ class StudentAgent(Agent):
     # Return the best move found (or random fallback)
     return best_move
   
-  def eval(self, board, color, opponent):
+  def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int, max_depth : int) -> bool:
+    '''
+    Check if the game has reached a terminal state or maximum depth.
+    '''
+    if depth >= max_depth:
+        return True
+    if check_endgame(board):
+        return True
+    if not get_valid_moves(board, player) and not get_valid_moves(board, opponent):
+        return True
+    return False
+    
+  
+  def eval(self, board : np.ndarray, color : int, opponent : int) -> float:
+    '''
+    Evaluation function to assess board state. Returns a score for the given move.
+    '''
     # Simple evaluation function: difference in number of pieces
     # This is taken from greedy_corners_agent.py 
     player_count = np.count_nonzero(board == color)
@@ -86,10 +107,13 @@ class StudentAgent(Agent):
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return score_diff - hole_penalty
+    return score_diff - 0.5*hole_penalty
   
-  def hole_penalty(self, board, color, opponent):
-    # Function to calculate hole penalty
+  def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
+    '''
+    Calculate penalty for empty squares (holes) that are adjacent to opponent pieces. Returns score as a float. 
+    '''
+
     penalty = 0
     n = board.shape[0]
 
@@ -116,7 +140,7 @@ class StudentAgent(Agent):
 
           # TODO: I am not sure if this considers whose turn it is... might need to adjust
           # I think this is fine, because we will only call this function in mimimax
-          if near_opp and not near_player: # If move is reachable  by opponent but not by player
+          if near_opp and not near_player: # If move is reachable by opponent but not by player
               penalty += 1
 
     return penalty
