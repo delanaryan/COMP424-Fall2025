@@ -58,23 +58,67 @@ class StudentAgent(Agent):
         return None  # No valid moves available, pass turn
 
     # Apply heuristic: maximize piece difference, corner control, and minimize opponent mobility
+    
     best_move = None
-    best_score = float('-inf')
+    best_value = float('-inf')
 
     for move in legal_moves:
-        simulated_board = copy.deepcopy(chess_board)
-        #simulated_board = chess_board.copy()
-
-        execute_move(simulated_board, move, player)
-        # evaluate by piece difference, corner bonus, and opponent mobility
-        move_score = self.eval(simulated_board, player, opponent)
-
-        if move_score > best_score:
-            best_score = move_score
-            best_move = move
-
-    # Return the best move found (or random fallback)
+      minimax_value = self.minimax(chess_board, 0, float('-inf'), float('inf'), player, opponent)
+      if minimax_value > best_value:
+          best_value = minimax_value
+          best_move = move  
     return best_move
+  
+  def minimax(self, chess_board : np.ndarray, depth : int, alpha : float, beta : float, player : int, opponent : int) -> float:
+    '''
+    Minimax algorithm with alpha-beta pruning.
+    Returns the best score for the current player.
+    Code repurposed from previous assignment. 
+    '''
+    legal_moves = get_valid_moves(chess_board, player)
+
+    if not legal_moves:
+      return self.eval(chess_board, player, opponent)  # Evaluate current board state, can't return None
+
+    tree = []
+    depth = 0
+    alpha = float('-inf')
+    beta = float('inf')
+
+    node = {
+        "depth": depth,
+        "player": "MAX" if player == 1 else "MIN",
+        "moves": [],
+        "alpha": alpha,
+        "beta": beta,
+        "value": None
+    }
+    tree.append(node)
+
+    if self.isTerminal(chess_board, player, opponent, depth, 10):
+        val = self.eval(chess_board, player, opponent)
+        node["value"] = val
+        tree.append(node)
+        return val
+        
+    for move in legal_moves:
+      new_board = execute_move(deepcopy(chess_board), move, player)
+      value = self.minimax(new_board, depth + 1, alpha, beta, player, opponent)
+      node["moves"].append({
+          "move": move,
+          "value": value,
+      })
+
+      if depth % 2 == 1 :
+          alpha = max(alpha, value)
+      else:
+          beta = min(beta, value)
+      if beta <= alpha:
+          break
+
+    node["value"] = alpha if player==1 else beta
+    tree.append(node)
+    return node["value"]
   
   def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int, max_depth : int) -> bool:
     '''
@@ -107,7 +151,7 @@ class StudentAgent(Agent):
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return score_diff - 0.5*hole_penalty
+    return score_diff - hole_penalty
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
