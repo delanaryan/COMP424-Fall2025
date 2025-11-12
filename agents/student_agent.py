@@ -1,5 +1,6 @@
 # Student agent: Add your own agent here
 #from matplotlib.pylab import copy
+import random
 from agents.agent import Agent
 import copy
 from store import register_agent
@@ -9,6 +10,7 @@ from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
 
+TREE = []
 @register_agent("student_agent")
 class StudentAgent(Agent):
   """
@@ -37,17 +39,6 @@ class StudentAgent(Agent):
     Please check the sample implementation in agents/random_agent.py or agents/human_agent.py for more details.
     """
 
-    # Some simple code to help you with timing. Consider checking 
-    # time_taken during your search and breaking with the best answer
-    # so far when it nears 2 seconds.
-    # Get all legal moves for the current player
-    
-
-    # Dummy return (you should replace this with your actual logic)
-    # Returning a random valid move as an example
-    #return random_move(chess_board,player)
-    # Get all legal moves for the current player
-
     ################################################
     # Alpha-Beta Pruning with Heuristic Evaluation #
     ################################################
@@ -58,17 +49,21 @@ class StudentAgent(Agent):
         return None  # No valid moves available, pass turn
 
     # Apply heuristic: maximize piece difference, corner control, and minimize opponent mobility
-    
     best_move = None
-    best_value = float('-inf')
+    best_score = float('-inf')
 
     for move in legal_moves:
-      minimax_value = self.minimax(chess_board, 0, float('-inf'), float('inf'), player, opponent)
-      if minimax_value > best_value:
-          best_value = minimax_value
-          best_move = move  
-    return best_move
-  
+        simulated_board = deepcopy(chess_board)
+        execute_move(simulated_board, move, player)
+        minimaxscore = self.minimax(simulated_board, 0, float('-inf'), float('inf'), player, opponent)
+
+        if minimaxscore > best_score:
+            best_score = minimaxscore
+            best_move = move
+
+    # Return the best move found (or random fallback)
+    return best_move or random.choice(legal_moves)
+
   def minimax(self, chess_board : np.ndarray, depth : int, alpha : float, beta : float, player : int, opponent : int) -> float:
     '''
     Minimax algorithm with alpha-beta pruning.
@@ -80,7 +75,6 @@ class StudentAgent(Agent):
     if not legal_moves:
       return self.eval(chess_board, player, opponent)  # Evaluate current board state, can't return None
 
-    tree = []
     depth = 0
     alpha = float('-inf')
     beta = float('inf')
@@ -93,23 +87,27 @@ class StudentAgent(Agent):
         "beta": beta,
         "value": None
     }
-    tree.append(node)
+
+    #TREE.append(node)
 
     if self.isTerminal(chess_board, player, opponent, depth, 10):
         val = self.eval(chess_board, player, opponent)
         node["value"] = val
-        tree.append(node)
+        TREE.append(node)
         return val
         
     for move in legal_moves:
-      new_board = execute_move(deepcopy(chess_board), move, player)
-      value = self.minimax(new_board, depth + 1, alpha, beta, player, opponent)
+      #new_board = execute_move(deepcopy(chess_board), move, player)
+      new_board = deepcopy(chess_board)
+      execute_move(new_board, move, player)
+
+      value = self.minimax(new_board, depth + 1, alpha, beta, player, opponent) 
       node["moves"].append({
           "move": move,
           "value": value,
       })
 
-      if depth % 2 == 1 :
+      if depth % 2 == 1: # Maximizing player, since depth starts at 0 and max player is at odd depths
           alpha = max(alpha, value)
       else:
           beta = min(beta, value)
@@ -117,7 +115,7 @@ class StudentAgent(Agent):
           break
 
     node["value"] = alpha if player==1 else beta
-    tree.append(node)
+    TREE.append(node)
     return node["value"]
   
   def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int, max_depth : int) -> bool:
@@ -143,6 +141,9 @@ class StudentAgent(Agent):
     opp_count = np.count_nonzero(board == opponent)
     score_diff = player_count - opp_count
 
+    opp_moves = len(get_valid_moves(board, opponent))
+    mobility_penalty = -opp_moves
+
     # Add some score penalization for holes in position
     # board[r][c] == 0 indicates empty square
 
@@ -151,7 +152,7 @@ class StudentAgent(Agent):
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return score_diff - hole_penalty
+    return score_diff + (0.5)*hole_penalty + (0.5)*mobility_penalty
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
