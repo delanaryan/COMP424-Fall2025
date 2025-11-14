@@ -10,7 +10,8 @@ from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
 
-TREE = []
+MAXDEPTH = 10
+#MOVES = {} # Dictionary to hold TERMINAL move scores
 @register_agent("student_agent")
 class StudentAgent(Agent):
   """
@@ -46,83 +47,60 @@ class StudentAgent(Agent):
     legal_moves = get_valid_moves(chess_board, player)
 
     if not legal_moves:
-        return None  # No valid moves available, pass turn
+        return None 
 
-    # Apply heuristic: maximize piece difference, corner control, and minimize opponent mobility
+    best_score = -float('inf')
     best_move = None
-    best_score = float('-inf')
 
     for move in legal_moves:
-        simulated_board = deepcopy(chess_board)
-        execute_move(simulated_board, move, player)
-        minimaxscore = self.minimax(simulated_board, 0, float('-inf'), float('inf'), player, opponent)
-
-        if minimaxscore > best_score:
-            best_score = minimaxscore
-            best_move = move
-
-    # Return the best move found (or random fallback)
-    return best_move or random.choice(legal_moves)
-
-  def minimax(self, chess_board : np.ndarray, depth : int, alpha : float, beta : float, player : int, opponent : int) -> float:
-    '''
-    Minimax algorithm with alpha-beta pruning.
-    Returns the best score for the current player.
-    Code repurposed from previous assignment. 
-    '''
-    legal_moves = get_valid_moves(chess_board, player)
-
-    if not legal_moves:
-      return self.eval(chess_board, player, opponent)  # Evaluate current board state, can't return None
-
-    depth = 0
-    alpha = float('-inf')
-    beta = float('inf')
-
-    node = {
-        "depth": depth,
-        "player": "MAX" if player == 1 else "MIN",
-        "moves": [],
-        "alpha": alpha,
-        "beta": beta,
-        "value": None
-    }
-
-    #TREE.append(node)
-
-    if self.isTerminal(chess_board, player, opponent, depth, 10):
-        val = self.eval(chess_board, player, opponent)
-        node["value"] = val
-        TREE.append(node)
-        return val
-        
-    for move in legal_moves:
-      #new_board = execute_move(deepcopy(chess_board), move, player)
       new_board = deepcopy(chess_board)
       execute_move(new_board, move, player)
+      score = self.minimax(new_board, depth=1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=False)
+      
+      if score > best_score:
+          best_score = score
+          best_move = move
 
-      value = self.minimax(new_board, depth + 1, alpha, beta, player, opponent) 
-      node["moves"].append({
-          "move": move,
-          "value": value,
-      })
+    return best_move
 
-      if depth % 2 == 1: # Maximizing player, since depth starts at 0 and max player is at odd depths
-          alpha = max(alpha, value)
-      else:
-          beta = min(beta, value)
-      if beta <= alpha:
-          break
+  def minimax(self, board: np.ndarray, depth: int, alpha: float, beta: float, player: int, opponent: int, maxTurn: bool) -> float:
+    """
+    Minimax with alpha-beta pruning.
+    Code based off algorithm provided by Geeks for Geeks: https://www.geeksforgeeks.org/dsa/minimax-algorithm-in-game-theory-set-4-alpha-beta-pruning/
+    """
 
-    node["value"] = alpha if player==1 else beta
-    TREE.append(node)
-    return node["value"]
+    if self.isTerminal(board, player, opponent, depth):
+        return self.eval(board, player, opponent)
+
+    if maxTurn: 
+        max_eval = -float('inf')
+        for move in get_valid_moves(board, player):
+            new_board = deepcopy(board)
+            execute_move(new_board, move, player)
+            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, False)
+            max_eval = max(max_eval, eval_score)
+            alpha = max(alpha, eval_score)
+            if beta <= alpha:
+                break 
+        return max_eval
+    
+    else: 
+        min_eval = float('inf')
+        for move in get_valid_moves(board, opponent):
+            new_board = deepcopy(board)
+            execute_move(new_board, move, opponent)
+            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, True)
+            min_eval = min(min_eval, eval_score)
+            beta = min(beta, eval_score)
+            if beta <= alpha:
+                break 
+        return min_eval
   
-  def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int, max_depth : int) -> bool:
+  def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int) -> bool:
     '''
     Check if the game has reached a terminal state or maximum depth.
     '''
-    if depth >= max_depth:
+    if depth >= MAXDEPTH:
         return True
     if check_endgame(board):
         return True
@@ -152,7 +130,7 @@ class StudentAgent(Agent):
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return score_diff + (0.5)*hole_penalty + (0.5)*mobility_penalty
+    return 2*score_diff + hole_penalty + mobility_penalty
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
