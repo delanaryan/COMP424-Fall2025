@@ -10,6 +10,16 @@ from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
 
+POSITION_WEIGHTS = np.array([ # Can change the position weights later
+    [ 3, -2,  1,  1,  1, -2,  3], # Weights range from -3 to 3 (from good to bad)
+    [-2, -3, -1, -1, -1, -3, -2], # Corners and edges are desireable, middle is neutral
+    [ 1, -1,  0,  0,  0, -1,  1], # Diagonally adjacent to corners is risky 
+    [ 1, -1,  0,  0,  0, -1,  1],
+    [ 1, -1,  0,  0,  0, -1,  1],
+    [-2, -3, -1, -1, -1, -3, -2],
+    [ 3, -2,  1,  1,  1, -2,  3]
+])
+
 TREE = []
 @register_agent("student_agent")
 class StudentAgent(Agent):
@@ -139,20 +149,35 @@ class StudentAgent(Agent):
     # This is taken from greedy_corners_agent.py 
     player_count = np.count_nonzero(board == color)
     opp_count = np.count_nonzero(board == opponent)
-    score_diff = player_count - opp_count
 
     opp_moves = len(get_valid_moves(board, opponent))
-    mobility_penalty = -opp_moves
+
 
     # Add some score penalization for holes in position
     # board[r][c] == 0 indicates empty square
 
+    # Score Difference
+    score_diff = player_count - opp_count
+
+    # Hole Penalty
     hole_penalty = self.hole_penalty(board, color, opponent)
+
+    # Mobility Penalty 
+    mobility_penalty = -opp_moves
+
+    # Positional Score
+    pos_score = self.positional_score(board, color, opponent)
+
+    # Weights? change later? 
+    w_score = 1
+    w_hole = 0.5
+    w_mobility = 0.5
+    w_position = 0.5
 
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return score_diff + (0.5)*hole_penalty + (0.5)*mobility_penalty
+    return (w_pieces * score_diff) + (w_hole * hole_penalty) + (w_mobility *mobility_penalty) + (w_position * pos_score)
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
@@ -189,4 +214,14 @@ class StudentAgent(Agent):
               penalty += 1
 
     return penalty
+
+  def positional_score(self, board, player, opponent):
+    player_positions = (board == player) # If the cell it taken by the player
+    opponent_positions = (board == opponent) # If the cell is taken by the opp
+
+    player_pos = np.sum(POSITION_WEIGHTS[player_positions]) # Sum of all the positional weights of the player
+    opp_pos = np.sum(POSITION_WEIGHTS[opponent_positions]) # Sum of all the pos weights of the opp 
+
+    # Returns the difference: positive if player is in a stronger position and then negative if opponent is
+    return player_pos - opp_pos 
   
