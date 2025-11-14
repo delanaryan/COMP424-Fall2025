@@ -85,9 +85,9 @@ class StudentAgent(Agent):
     if not legal_moves:
       return self.eval(chess_board, player, opponent)  # Evaluate current board state, can't return None
 
-    depth = 0
-    alpha = float('-inf')
-    beta = float('inf')
+    #depth = 0
+    #alpha = float('-inf')
+    #beta = float('inf')
 
     node = {
         "depth": depth,
@@ -111,20 +111,22 @@ class StudentAgent(Agent):
       new_board = deepcopy(chess_board)
       execute_move(new_board, move, player)
 
-      value = self.minimax(new_board, depth + 1, alpha, beta, player, opponent) 
+      # changed name of value to child_value
+      child_value = self.minimax(new_board, depth + 1, alpha, beta, opponent, player) # swapped player and opponent
       node["moves"].append({
           "move": move,
-          "value": value,
+          "value": child_value,
       })
 
-      if depth % 2 == 1: # Maximizing player, since depth starts at 0 and max player is at odd depths
-          alpha = max(alpha, value)
+      #if depth % 2 == 1: # Maximizing player, since depth starts at 0 and max player is at odd depths
+      player == self.my_player_id:    
+          alpha = max(alpha, child_value)
       else:
-          beta = min(beta, value)
+          beta = min(beta, child_value)
       if beta <= alpha:
           break
 
-    node["value"] = alpha if player==1 else beta
+    node["value"] = alpha if player == self.my_player_id else beta ## Changed from player==1
     TREE.append(node)
     return node["value"]
   
