@@ -62,6 +62,9 @@ class StudentAgent(Agent):
     best_move = None
     best_score = float('-inf')
 
+    if not hasattr(self, "my_player_id"): # Remembers the player ID (helps wth minimax)
+      self.my_player_id = player
+
     for move in legal_moves:
         simulated_board = deepcopy(chess_board)
         execute_move(simulated_board, move, player)
