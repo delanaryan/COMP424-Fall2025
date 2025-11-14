@@ -175,9 +175,9 @@ class StudentAgent(Agent):
 
     # Weights? change later? 
     w_score = 1
-    w_hole = 0.5
+    w_hole = 0.8
     w_mobility = 0.5
-    w_position = 0.5
+    w_position = 0.4
 
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
