@@ -119,7 +119,7 @@ class StudentAgent(Agent):
       })
 
       #if depth % 2 == 1: # Maximizing player, since depth starts at 0 and max player is at odd depths
-      player == self.my_player_id:    
+      if player == self.my_player_id:    
           alpha = max(alpha, child_value)
       else:
           beta = min(beta, child_value)
@@ -179,7 +179,7 @@ class StudentAgent(Agent):
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return (w_pieces * score_diff) + (w_hole * hole_penalty) + (w_mobility *mobility_penalty) + (w_position * pos_score)
+    return (w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility *mobility_penalty) + (w_position * pos_score)
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
