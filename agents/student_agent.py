@@ -9,6 +9,7 @@ import numpy as np
 from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
+from agents.greedy_corners_agent import StudentAgent as GreedyAgent
 
 POSITION_WEIGHTS = np.array([ # Can change the position weights later
     [ 3, -2,  1,  1,  1, -2,  3], # Weights range from -3 to 3 (from good to bad)
@@ -91,6 +92,7 @@ class StudentAgent(Agent):
 
     if self.isTerminal(board, player, opponent, depth+1):
         return self.eval(board, player, opponent)
+        #return self.greedy_eval(board, player, opponent)
 
     if maxTurn: 
         max_eval = -float('inf')
@@ -155,15 +157,18 @@ class StudentAgent(Agent):
     pos_score = self.positional_score(board, color, opponent)
 
     # Weights? change later? 
-    w_score = 10.0
-    w_hole = 0.5
+    w_score = 8.0
+    w_hole = 0.25
     w_mobility = 3.0
-    w_position = 0.5
+    w_position = 2.0
 
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
     return (w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility * mobility_penalty) + (w_position * pos_score)
+  
+  def greedy_eval(self, board : np.ndarray, color: int, opponent: int) -> float:
+     return GreedyAgent().evaluate_board(board, color, opponent)
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
