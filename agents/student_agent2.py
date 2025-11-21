@@ -9,6 +9,17 @@ import numpy as np
 from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
+from agents.greedy_corners_agent import StudentAgent as GreedyAgent
+
+POSITION_WEIGHTS = np.array([ # Can change the position weights later
+    [ 3, -2,  1,  1,  1, -2,  3], # Weights range from -3 to 3 (from good to bad)
+    [-2, -3, -1, -1, -1, -3, -2], # Corners and edges are desireable, middle is neutral
+    [ 1, -1,  0,  0,  0, -1,  1], # Diagonally adjacent to corners is risky 
+    [ 1, -1,  0,  0,  0, -1,  1],
+    [ 1, -1,  0,  0,  0, -1,  1],
+    [-2, -3, -1, -1, -1, -3, -2],
+    [ 3, -2,  1,  1,  1, -2,  3]
+])
 
 POSITION_WEIGHTS = np.array([ #Position weights normalized on a scale of 0 to 10 for non-negative evaluation
     [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.],
@@ -20,9 +31,9 @@ POSITION_WEIGHTS = np.array([ #Position weights normalized on a scale of 0 to 10
     [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.]
 ])
 
-MAXDEPTH = 6
+MAXDEPTH = 10
 #MOVES = {} # Dictionary to hold TERMINAL move scores
-@register_agent("student_agent")
+@register_agent("student_agent2")
 class StudentAgent(Agent):
   """
   A class for your implementation. Feel free to use this class to
@@ -63,10 +74,10 @@ class StudentAgent(Agent):
     best_move = None
 
     for move in legal_moves:
-      new_board = np.copy(chess_board) # np.copy instead of deep copy 
+      new_board = deepcopy(chess_board)
       execute_move(new_board, move, player)
-      score = self.minimax(new_board, depth=1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=False) # its mins turn
-
+      score = self.minimax(new_board, depth=1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
+      
       if score > best_score:
           best_score = score
           best_move = move
@@ -79,21 +90,15 @@ class StudentAgent(Agent):
     Code based off algorithm provided by Geeks for Geeks: https://www.geeksforgeeks.org/dsa/minimax-algorithm-in-game-theory-set-4-alpha-beta-pruning/
     """
 
-    if self.isTerminal(board, player, opponent, depth): # removed depth + 1
+    if self.isTerminal(board, player, opponent, depth+1):
         return self.eval(board, player, opponent)
-
-    # Determine whose turn it is
-    cur_player = player if maxTurn else opponent
-    valid_moves = get_valid_moves(board, cur_player)
-
-    # Move ordering
-    valid_moves = self.order_moves(board, valid_moves, cur_player, opponent if maxTurn else player)
+        #return self.greedy_eval(board, player, opponent)
 
     if maxTurn: 
         max_eval = -float('inf')
-        for move in valid_moves:
-            new_board = np.copy(board)
-            execute_move(new_board, move, cur_player)
+        for move in get_valid_moves(board, player):
+            new_board = deepcopy(board)
+            execute_move(new_board, move, player)
             eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, False)
             max_eval = max(max_eval, eval_score)
             alpha = max(alpha, eval_score)
@@ -103,10 +108,10 @@ class StudentAgent(Agent):
     
     else: 
         min_eval = float('inf')
-        for move in valid_moves:
-            new_board = np.copy(board)
-            execute_move(new_board, move, cur_player)
-            eval_score = self.minimax(new_board, depth + 1, alpha, beta, player, opponent, True)
+        for move in get_valid_moves(board, opponent):
+            new_board = deepcopy(board)
+            execute_move(new_board, move, opponent)
+            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, True)
             min_eval = min(min_eval, eval_score)
             beta = min(beta, eval_score)
             if beta <= alpha:
@@ -146,33 +151,24 @@ class StudentAgent(Agent):
     hole_penalty = self.hole_penalty(board, color, opponent)
 
     # Mobility Penalty 
-    mobility_penalty = len(get_valid_moves(board, color)) - len(get_valid_moves(board, opponent))
+    mobility_penalty = -opp_moves
 
     # Positional Score
     pos_score = self.positional_score(board, color, opponent)
 
-    # Perimeter Penalty
-    perim_penalty = -(self.perimeter_penalty(board, color, opponent))
-
-    # For the progress tracking
-    empty_count = np.count_nonzero(board == 0)
-    total = board.size
-    progress = 1 - (empty_count/total)  # 0 = start, 1 = end game
-    
-    # Dynamic weights across game phases
-    w_score     = 5.0 + 10.0*progress
-    w_mobility  = 5.0 - 3.5*progress
-    w_position  = 1.5 - 1.2*progress
-    w_hole      = 0.5 * (1 - progress)
-    w_perimeter = 1.0 * (1 + progress)
-
-    evaluation = ((w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility * mobility_penalty)
-                + (w_position * pos_score) + (w_perimeter * perim_penalty))
+    # Weights? change later? 
+    w_score = 8.0
+    w_hole = 0.25
+    w_mobility = 3.0
+    w_position = 2.0
 
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
     # TODO: Modify the weights as needed, this can be done after testing. 
-    return evaluation
+    return (w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility * mobility_penalty) + (w_position * pos_score)
+  
+  def greedy_eval(self, board : np.ndarray, color: int, opponent: int) -> float:
+     return GreedyAgent().evaluate_board(board, color, opponent)
   
   def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
     '''
@@ -210,10 +206,7 @@ class StudentAgent(Agent):
 
     return penalty
 
-  def positional_score(self, board : np.ndarray, player : int, opponent : int) -> float:
-    """
-    Scoring based off of what placements are more desireable
-    """
+  def positional_score(self, board, player, opponent):
     player_positions = (board == player) # If the cell it taken by the player
     opponent_positions = (board == opponent) # If the cell is taken by the opp
 
@@ -222,47 +215,3 @@ class StudentAgent(Agent):
 
     # Returns the difference: positive if player is in a stronger position and then negative if opponent is
     return player_pos - opp_pos 
-
-  def perimeter_penalty(self, board : np.ndarray, player : int, opponent : int) -> float:
-    """
-    player's pieces adjacent to empty squares
-    """
-    n = board.shape[0]
-    dirs = get_directions()
-    count = 0
-
-    for row in range(n):
-        for col in range(n):
-            if board[row][col] != player:
-                continue
-            for dr, dc in dirs:
-                nr, nc = row + dr, col + dc
-                if 0 <= nr < n and 0 <= nc < n and board[nr][nc] == 0:
-                    count += 1
-                    break
-    return count
-
-  def order_moves(self, board : np.ndarray, valid_moves : list, cur_player : int, other_player : int) -> list:
-    """
-    Move ordering = prefer moves that capture lots of opponent pieces and that increase mobility
-    """
-    scores = []
-
-
-    for move in moves:
-        # Simulate
-        new_board = np.copy(board)
-        execute_move(new_board, move, cur_player)
-
-        # Capture estimate, difference in opponent piece count (so positive if we gained)
-        capture_gain = np.count_nonzero(board == other_player) - np.count_nonzero(new_board == other_player)
-        # Mobility estimate, how many moves we have after making the move
-        mobility = len(get_valid_moves(new_board, cur_player))
-
-        score = (capture_gain*2.0) + (mobility*0.5) # Combine the estimates
-        scores.append((score, move))
-
-    # Best moves first
-    scores.sort(key=lambda x: x[0], reverse=True)
-    ordered_moves = [m for (_, m) in scores]
-    return ordered_moves
