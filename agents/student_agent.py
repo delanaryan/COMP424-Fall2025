@@ -10,16 +10,6 @@ from copy import deepcopy
 import time
 from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
 
-POSITION_WEIGHTS = np.array([ # Can change the position weights later
-    [ 3, -2,  1,  1,  1, -2,  3], # Weights range from -3 to 3 (from good to bad)
-    [-2, -3, -1, -1, -1, -3, -2], # Corners and edges are desireable, middle is neutral
-    [ 1, -1,  0,  0,  0, -1,  1], # Diagonally adjacent to corners is risky 
-    [ 1, -1,  0,  0,  0, -1,  1],
-    [ 1, -1,  0,  0,  0, -1,  1],
-    [-2, -3, -1, -1, -1, -3, -2],
-    [ 3, -2,  1,  1,  1, -2,  3]
-])
-
 POSITION_WEIGHTS = np.array([ #Position weights normalized on a scale of 0 to 10 for non-negative evaluation
     [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.],
     [1.66666667, 0., 3.33333333, 3.33333333, 3.33333333, 0., 1.66666667],
