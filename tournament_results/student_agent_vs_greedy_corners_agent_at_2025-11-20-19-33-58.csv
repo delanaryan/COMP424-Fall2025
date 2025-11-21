@@ -1,0 +1,2 @@
+P1Name,P2Name,NumRuns,P1WinPercent,P2WinPercent,P1RunTime,P2RunTime
+student_agent,greedy_corners_agent,100,0.36,0.64,0.18265,0.10228
