@@ -76,7 +76,7 @@ class StudentAgent(Agent):
     for move in legal_moves:
       new_board = deepcopy(chess_board)
       execute_move(new_board, move, player)
-      score = self.minimax(new_board, depth=1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
+      score = self.minimax(new_board, 1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
       
       if score > best_score:
           best_score = score
@@ -91,7 +91,7 @@ class StudentAgent(Agent):
     """
 
     if self.isTerminal(board, player, opponent, depth+1):
-        return self.eval(board, player, opponent)
+        return self.eval(board, player, maxTurn, opponent)
         #return self.greedy_eval(board, player, opponent)
 
     if maxTurn: 
@@ -124,21 +124,34 @@ class StudentAgent(Agent):
     '''
     if depth >= MAXDEPTH:
         return True
-    if check_endgame(board):
+    if check_endgame(board) != None:
         return True
     return False
     
   
-  def eval(self, board : np.ndarray, color : int, opponent : int) -> float:
+  def eval(self, board : np.ndarray, color : int, maxTurn : bool, opponent : int) -> float:
     '''
     Evaluation function to assess board state. Returns a score for the given move.
     '''
     # Simple evaluation function: difference in number of pieces
     # This is taken from greedy_corners_agent.py 
-    player_count = np.count_nonzero(board == color)
-    opp_count = np.count_nonzero(board == opponent)
+    if opponent == 1:
+      player = 2
+    else:
+       player = 1
 
-    opp_moves = len(get_valid_moves(board, opponent))
+    if maxTurn: 
+       player_count = np.count_nonzero(board == player)
+       opp_count = np.count_nonzero(board == opponent)
+       opp_moves = len(get_valid_moves(board, opponent))
+       hole_penalty = self.hole_penalty(board, player, opponent)
+       pos_score = self.positional_score(board, player, opponent)
+    else: 
+       opp_count = np.count_nonzero(board == player)
+       opp_moves = len(get_valid_moves(board, player))
+       player_count = np.count_nonzero(board == opponent)
+       hole_penalty = self.hole_penalty(board, opponent, player)
+       pos_score = self.positional_score(board, opponent, player)
 
 
     # Add some score penalization for holes in position
@@ -148,19 +161,51 @@ class StudentAgent(Agent):
     score_diff = player_count - opp_count
 
     # Hole Penalty
-    hole_penalty = self.hole_penalty(board, color, opponent)
+    #hole_penalty = self.hole_penalty(board, color, opponent)
 
     # Mobility Penalty 
     mobility_penalty = -opp_moves
 
     # Positional Score
-    pos_score = self.positional_score(board, color, opponent)
+    #pos_score = self.positional_score(board, color, opponent)
 
     # Weights? change later? 
-    w_score = 8.0
-    w_hole = 0.25
-    w_mobility = 3.0
-    w_position = 2.0
+    #w_score = 8.0
+    #w_hole = 0.25
+    #w_mobility = 3.0
+    #w_position = 2.0
+
+    empty_count = np.count_nonzero(board == 0)
+    total = board.size
+    progress = 1 - (empty_count/total)  # 0 = start, 1 = end game
+    
+    # Dynamic weights across game phases
+    w_score     = 5.0 + 10.0*progress
+    w_mobility  = 5.0 - 3.5*progress
+    w_position  = 1.5 - 1.2*progress
+    w_hole      = 0.5 * (1 - progress)
+
+    if opponent == 1: 
+      player = 2
+    else: 
+       player = 1
+
+    endgame, p1score, p2score = check_endgame(board)
+
+    if endgame:
+       if p1score > p2score: 
+          if maxTurn and player == 1:
+             return 10000
+          if not maxTurn and opponent == 1:
+             return 10000
+          else: return -10000
+       else: 
+          if maxTurn and player == 2:
+             return 10000
+          if not maxTurn and opponent == 2:
+             return 10000
+          else: return -10000
+
 
     # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
     # We may want to divide our eval function heuristics into separate functions for modularity
