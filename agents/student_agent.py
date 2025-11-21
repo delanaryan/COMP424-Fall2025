@@ -82,12 +82,12 @@ class StudentAgent(Agent):
     if self.isTerminal(board, player, opponent, depth): # removed depth + 1
         return self.eval(board, player, opponent)
 
-        # Determine whose turn it is
-        cur_player = player if maxTurn else opponent
-        valid_moves = get_valid_moves(board, cur_player)
+    # Determine whose turn it is
+    cur_player = player if maxTurn else opponent
+    valid_moves = get_valid_moves(board, cur_player)
 
-        # Move ordering
-        valid_moves = self.order_moves(board, valid_moves, cur_player, opponent if maxTurn else player)
+    # Move ordering
+    valid_moves = self.order_moves(board, valid_moves, cur_player, opponent if maxTurn else player)
 
     if maxTurn: 
         max_eval = -float('inf')
