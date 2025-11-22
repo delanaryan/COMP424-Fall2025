@@ -31,8 +31,10 @@ POSITION_WEIGHTS = np.array([ #Position weights normalized on a scale of 0 to 10
     [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.]
 ])
 
-MAXDEPTH = 10
+MAXDEPTH = 2
 #MOVES = {} # Dictionary to hold TERMINAL move scores
+TRANSPOSITION_TABLE = {}
+
 @register_agent("student_agent")
 class StudentAgent(Agent):
   """
@@ -73,144 +75,130 @@ class StudentAgent(Agent):
     best_score = -float('inf')
     best_move = None
 
+    best_moves = []
+
     for move in legal_moves:
       new_board = deepcopy(chess_board)
       execute_move(new_board, move, player)
-      score = self.minimax(new_board, 1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
+      #score = self.minimax(new_board, 1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
+      score = self.minimax(new_board, depth=1, alpha=-float('inf'), beta=float('inf'), maximizing_player=player, minimizing_player=opponent, current_mover=opponent)
       
       if score > best_score:
-          best_score = score
-          best_move = move
+        best_score = score
+        best_moves = [move]
+      elif score == best_score:
+        best_moves.append(move)
 
-    return best_move
+    return random.choice(best_moves)
 
-  def minimax(self, board: np.ndarray, depth: int, alpha: float, beta: float, player: int, opponent: int, maxTurn: bool) -> float:
+  def minimax(self, board: np.ndarray, depth: int, alpha: float, beta: float, maximizing_player: int, minimizing_player: int, current_mover: int) -> float:
     """
-    Minimax with alpha-beta pruning.
-    Code based off algorithm provided by Geeks for Geeks: https://www.geeksforgeeks.org/dsa/minimax-algorithm-in-game-theory-set-4-alpha-beta-pruning/
+    Minimax with alpha-beta pruning. `maximizing_player` and `minimizing_player`
+    are constants (Option A). `current_mover` is whose turn it is at this node.
+    Depth counts plys from the root (root after the initial simulated move had depth=1). 
     """
 
-    if self.isTerminal(board, player, opponent, depth+1):
-        return self.eval(board, player, maxTurn, opponent)
-        #return self.greedy_eval(board, player, opponent)
-
-    if maxTurn: 
-        max_eval = -float('inf')
-        for move in get_valid_moves(board, player):
-            new_board = deepcopy(board)
-            execute_move(new_board, move, player)
-            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, False)
-            max_eval = max(max_eval, eval_score)
-            alpha = max(alpha, eval_score)
-            if beta <= alpha:
-                break 
-        return max_eval
-    
-    else: 
-        min_eval = float('inf')
-        for move in get_valid_moves(board, opponent):
-            new_board = deepcopy(board)
-            execute_move(new_board, move, opponent)
-            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, True)
-            min_eval = min(min_eval, eval_score)
-            beta = min(beta, eval_score)
-            if beta <= alpha:
-                break 
-        return min_eval
-  
-  def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int) -> bool:
-    '''
-    Check if the game has reached a terminal state or maximum depth.
-    '''
-    if depth >= MAXDEPTH:
-        return True
-    if check_endgame(board) != None:
-        return True
-    return False
-    
-  
-  def eval(self, board : np.ndarray, color : int, maxTurn : bool, opponent : int) -> float:
-    '''
-    Evaluation function to assess board state. Returns a score for the given move.
-    '''
-    # Simple evaluation function: difference in number of pieces
-    # This is taken from greedy_corners_agent.py 
-    if opponent == 1:
-      player = 2
-    else:
-       player = 1
-
-    if maxTurn: 
-       player_count = np.count_nonzero(board == player)
-       opp_count = np.count_nonzero(board == opponent)
-       opp_moves = len(get_valid_moves(board, opponent))
-       hole_penalty = self.hole_penalty(board, player, opponent)
-       pos_score = self.positional_score(board, player, opponent)
-    else: 
-       opp_count = np.count_nonzero(board == player)
-       opp_moves = len(get_valid_moves(board, player))
-       player_count = np.count_nonzero(board == opponent)
-       hole_penalty = self.hole_penalty(board, opponent, player)
-       pos_score = self.positional_score(board, opponent, player)
-
-
-    # Add some score penalization for holes in position
-    # board[r][c] == 0 indicates empty square
-
-    # Score Difference
-    score_diff = player_count - opp_count
-
-    # Hole Penalty
-    #hole_penalty = self.hole_penalty(board, color, opponent)
-
-    # Mobility Penalty 
-    mobility_penalty = -opp_moves
-
-    # Positional Score
-    #pos_score = self.positional_score(board, color, opponent)
-
-    # Weights? change later? 
-    #w_score = 8.0
-    #w_hole = 0.25
-    #w_mobility = 3.0
-    #w_position = 2.0
-
-    empty_count = np.count_nonzero(board == 0)
-    total = board.size
-    progress = 1 - (empty_count/total)  # 0 = start, 1 = end game
-    
-    # Dynamic weights across game phases
-    w_score     = 5.0 + 10.0*progress
-    w_mobility  = 5.0 - 3.5*progress
-    w_position  = 1.5 - 1.2*progress
-    w_hole      = 0.5 * (1 - progress)
-
-    if opponent == 1: 
-      player = 2
-    else: 
-       player = 1
-
+    # Terminal test: either game ended or depth limit reached. 
     endgame, p1score, p2score = check_endgame(board)
 
+    if depth >= MAXDEPTH or endgame:
+      return self.eval_terminal_or_heuristic(board, maximizing_player, minimizing_player, endgame, p1score, p2score)
+
+    # Decide which moves to iterate
+    moves = get_valid_moves(board, current_mover)
+    if not moves:
+      # If no moves available for current mover, the turn would pass to the other player.
+      # We'll call minimax with the other player's turn but increment depth by 1 (passing still consumes ply). 
+      next_mover = maximizing_player if current_mover == minimizing_player else minimizing_player
+      return self.minimax(board, depth+1, alpha, beta, maximizing_player, minimizing_player, next_mover)
+
+    # If it's the maximizing player's turn
+    if current_mover == maximizing_player:
+      value = -float('inf')
+      next_mover = minimizing_player
+      for move in moves:
+        new_board = deepcopy(board)
+        execute_move(new_board, move, current_mover)
+        eval_score = self.minimax(new_board, depth+1, alpha, beta, maximizing_player, minimizing_player, next_mover)
+        value = max(value, eval_score)
+        alpha = max(alpha, eval_score)
+        if alpha >= beta:
+          break
+      return value
+
+    # Else it's the minimizing player's turn
+    else:
+      value = float('inf')
+      next_mover = maximizing_player
+      for move in moves:
+        new_board = deepcopy(board)
+        execute_move(new_board, move, current_mover)
+        eval_score = self.minimax(new_board, depth+1, alpha, beta,
+                                  maximizing_player, minimizing_player, next_mover)
+        value = min(value, eval_score)
+        beta = min(beta, eval_score)
+        if alpha >= beta:
+          break
+      return value
+
+  def eval_terminal_or_heuristic(self, board: np.ndarray, maximizing_player: int, minimizing_player: int, endgame: bool, p1score: int, p2score: int) -> float:
+    """
+    If terminal, give a big positive/negative score relative to maximizing_player.
+    Otherwise return the heuristic evaluation. 
+    """
     if endgame:
-       if p1score > p2score: 
-          if maxTurn and player == 1:
-             return 10000
-          if not maxTurn and opponent == 1:
-             return 10000
-          else: return -10000
-       else: 
-          if maxTurn and player == 2:
-             return 10000
-          if not maxTurn and opponent == 2:
-             return 10000
-          else: return -10000
+      # Determine player scores
+      if p1score > p2score:
+        winner = 1
+      elif p2score > p1score:
+        winner = 2
+      else:
+        winner = 0  # tie
 
+      if winner == maximizing_player:
+        return 10000.0
+      elif winner == minimizing_player:
+        return -10000.0
+      else:
+        return 0.0  # tie
 
-    # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
-    # We may want to divide our eval function heuristics into separate functions for modularity
-    # TODO: Modify the weights as needed, this can be done after testing. 
-    return (w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility * mobility_penalty) + (w_position * pos_score)
+    # Not terminal => fallback to heuristic evaluation
+    return self.eval(board, maximizing_player, minimizing_player)
+
+  def eval(self, board : np.ndarray, maximizing_player : int, minimizing_player : int) -> float:
+    """
+    Heuristic evaluation from the perspective of maximizing_player. NEVER overwrites player IDs. 🟢
+    Combines piece count difference, mobility (both sides), hole penalty (for squares good for opponent),
+    and positional weights.
+    """
+
+    max_count = np.count_nonzero(board == maximizing_player)
+    min_count = np.count_nonzero(board == minimizing_player)
+    score_diff = max_count - min_count  # positive is good for maximizing player
+
+    # Mobility: number of legal moves for each
+    max_moves = len(get_valid_moves(board, maximizing_player))
+    min_moves = len(get_valid_moves(board, minimizing_player))
+    mobility = max_moves - min_moves  # positive is good for maximizing player
+
+    hole_pen = self.hole_penalty(board, maximizing_player, minimizing_player)  # penalty for maximizing_player
+
+    pos_score = self.positional_score(board, maximizing_player, minimizing_player)
+
+    # Game progress to adapt weights (0 = start, 1 = finished)
+    empty_count = np.count_nonzero(board == 0)
+    total = board.size
+    progress = 1.0 - (empty_count / total)
+
+    # Dynamic weights (tuneable)
+    w_score     = 5.0 + 10.0 * progress
+    w_mobility  = 5.0 - 3.5 * progress
+    w_position  = 1.5 - 1.2 * progress
+    w_hole      = 0.5 * (1.0 - progress)
+
+    # Combine. Hole_penalty is positive if it's bad for maximizing player so subtract it.
+    value = (w_score * score_diff) + (w_mobility * mobility) - (w_hole * hole_pen) + (w_position * pos_score)
+    return value
   
   def greedy_eval(self, board : np.ndarray, color: int, opponent: int) -> float:
      return GreedyAgent().evaluate_board(board, color, opponent)
