@@ -313,9 +313,8 @@ class StudentAgent(Agent):
             hole_pen = 0
 
         # Game progress
-        #empty_count = np.count_nonzero(board == 0)
-        empty_count = board.shape[0] - (my_count + opp_count)
-        progress = 1.0 - (empty_count / board.size)
+        empty_count = np.count_nonzero(board == 0)
+        progress = 1.0 - (empty_count / board.size) # 0 = start, 1 = end game
 
         # Dynamic weights
         w_score    = 5.0 + 10.0 * progress
@@ -371,11 +370,7 @@ class StudentAgent(Agent):
         Positional score based on POSITION_WEIGHTS.
         Positive if `player` is better placed than `opponent`.
         """
-        n = board.shape[0]
-        if n == 7:
-            weights = POSITION_WEIGHTS
-        else:
-            weights = self._resize_pos_weights(POSITION_WEIGHTS, n)
+        weights = POSITION_WEIGHTS
 
         player_positions = (board == player)
         opponent_positions = (board == opponent)
@@ -384,31 +379,6 @@ class StudentAgent(Agent):
         opp_pos = float(np.sum(weights[opponent_positions]))
 
         return player_pos - opp_pos
-
-    def _resize_pos_weights(self, base: np.ndarray, n: int) -> np.ndarray:
-        """
-        Resize the 7x7 positional weight matrix to n x n by centering
-        and padding with nearest edge values.
-        """
-        if n == base.shape[0]:
-            return base
-
-        resized = np.zeros((n, n), dtype=float)
-
-        min_n = min(n, base.shape[0])
-        start_src = (base.shape[0] - min_n) // 2
-        start_dst = (n - min_n) // 2
-
-        resized[start_dst:start_dst + min_n, start_dst:start_dst + min_n] = \
-            base[start_src:start_src + min_n, start_src:start_src + min_n]
-
-        # Edge padding.
-        resized[0, :] = resized[1, :]
-        resized[-1, :] = resized[-2, :]
-        resized[:, 0] = resized[:, 1]
-        resized[:, -1] = resized[:, -2]
-
-        return resized
 
     def choose_search_depth(self, board: np.ndarray) -> int:
         """
@@ -427,4 +397,3 @@ class StudentAgent(Agent):
         else:
             # Late game: fewer moves, can afford deeper search.
             return BASE_MAX_DEPTH + 1    # 5
-
