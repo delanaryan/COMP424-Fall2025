@@ -1,263 +1,430 @@
-# Student agent: Add your own agent here
-#from matplotlib.pylab import copy
+# Authors: Delana Ryan, Bailey Corriveau, Yuna Ruel
+
+from __future__ import annotations
+
+import math
 import random
-from agents.agent import Agent
-import copy
-from store import register_agent
-import sys
+from typing import Dict, Tuple, List
+
 import numpy as np
-from copy import deepcopy
-import time
-from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
-from agents.greedy_corners_agent import StudentAgent as GreedyAgent
 
-POSITION_WEIGHTS = np.array([ # Can change the position weights later
-    [ 3, -2,  1,  1,  1, -2,  3], # Weights range from -3 to 3 (from good to bad)
-    [-2, -3, -1, -1, -1, -3, -2], # Corners and edges are desireable, middle is neutral
-    [ 1, -1,  0,  0,  0, -1,  1], # Diagonally adjacent to corners is risky 
-    [ 1, -1,  0,  0,  0, -1,  1],
-    [ 1, -1,  0,  0,  0, -1,  1],
+from agents.agent import Agent
+from store import register_agent
+from helpers import (
+    get_valid_moves,
+    execute_move,
+    check_endgame,
+    get_directions,
+    MoveCoordinates,
+    get_two_tile_directions,
+)
+
+# Base depth; we adapt this depending on how many empty squares remain.
+BASE_MAX_DEPTH = 3
+TERMINAL_SCORE_MULTIPLIER = 1000
+
+# Positional weights matrix (borrowed / adapted from original student_agent)
+POSITION_WEIGHTS = np.array([
+    [ 3, -2,  1,  1,  1, -2,  3],
     [-2, -3, -1, -1, -1, -3, -2],
-    [ 3, -2,  1,  1,  1, -2,  3]
-])
+    [ 1, -1,  1,  0,  1, -1,  1],
+    [ 1, -1,  0,  3,  0, -1,  1],
+    [ 1, -1,  1,  0,  1, -1,  1],
+    [-2, -3, -1, -1, -1, -3, -2],
+    [ 3, -2,  1,  1,  1, -2,  3],
+], dtype=float)
 
-POSITION_WEIGHTS = np.array([ #Position weights normalized on a scale of 0 to 10 for non-negative evaluation
-    [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.],
-    [1.66666667, 0., 3.33333333, 3.33333333, 3.33333333, 0., 1.66666667],
-    [6.66666667, 3.33333333, 5., 5., 5., 3.33333333, 6.66666667],
-    [6.66666667, 3.33333333, 5., 5., 5., 3.33333333, 6.66666667],
-    [6.66666667, 3.33333333, 5., 5., 5., 3.33333333, 6.66666667],
-    [1.66666667, 0., 3.33333333, 3.33333333, 3.33333333, 0., 1.66666667],
-    [10., 1.66666667, 6.66666667, 6.66666667, 6.66666667, 1.66666667, 10.]
-])
 
-MAXDEPTH = 10
-#MOVES = {} # Dictionary to hold TERMINAL move scores
 @register_agent("student_agent")
 class StudentAgent(Agent):
-  """
-  A class for your implementation. Feel free to use this class to
-  add any helper functionalities needed for your agent.
-  """
-
-  def __init__(self):
-    super(StudentAgent, self).__init__()
-    self.name = "StudentAgent"
-
-  def step(self, chess_board, player, opponent):
     """
-    Implement the step function of your agent here.
-    You can use the following variables to access the chess board:
-    - chess_board: a numpy array of shape (board_size, board_size)
-      where 0 represents an empty spot, 1 represents Player 1's discs (Blue),
-      and 2 represents Player 2's discs (Brown).
-    - player: 1 if this agent is playing as Player 1 (Blue), or 2 if playing as Player 2 (Brown).
-    - opponent: 1 if the opponent is Player 1 (Blue), or 2 if the opponent is Player 2 (Brown).
+    Strong search-based Ataxx agent.
 
-    You should return a tuple (r,c), where (r,c) is the position where your agent
-    wants to place the next disc. Use functions in helpers to determine valid moves
-    and more helpful tools.
-
-    Please check the sample implementation in agents/random_agent.py or agents/human_agent.py for more details.
+    This version combines:
+    - minimax + alpha–beta
+    - a transposition table for caching
+    - move ordering
+    - a rich heuristic (piece count, mobility, hole penalty, positional weights)
     """
 
-    ################################################
-    # Alpha-Beta Pruning with Heuristic Evaluation #
-    ################################################
-    
-    legal_moves = get_valid_moves(chess_board, player)
+    def __init__(self) -> None:
+        super().__init__()
+        self.name = "StudentAgent"
 
-    if not legal_moves:
-        return None 
+        # transposition table: state -> value
+        self.transposition_table: Dict[Tuple[bytes, int, int, int], float] = {}
 
-    best_score = -float('inf')
-    best_move = None
+        # Precompute neighbour directions (8 surrounding squares)
+        self._neighbour_dirs: List[Tuple[int, int]] = get_directions()
 
-    for move in legal_moves:
-      new_board = deepcopy(chess_board)
-      execute_move(new_board, move, player)
-      score = self.minimax(new_board, 1, alpha=-float('inf'), beta=float('inf'), player=player, opponent=opponent, maxTurn=True)
-      
-      if score > best_score:
-          best_score = score
-          best_move = move
+    # ------------------------------------------------------------------
+    # Entry point called by the framework
+    # ------------------------------------------------------------------
+    def step(self, chess_board: np.ndarray, player: int, opponent: int):
+        # Clear cache for this move.
+        #self.transposition_table.clear()
 
-    return best_move
+        legal_moves = get_valid_moves(chess_board, player)
+        if not legal_moves:
+            raise RuntimeError("StudentAgent.step called with no legal moves.")
 
-  def minimax(self, board: np.ndarray, depth: int, alpha: float, beta: float, player: int, opponent: int, maxTurn: bool) -> float:
-    """
-    Minimax with alpha-beta pruning.
-    Code based off algorithm provided by Geeks for Geeks: https://www.geeksforgeeks.org/dsa/minimax-algorithm-in-game-theory-set-4-alpha-beta-pruning/
-    """
+        max_depth = self.choose_search_depth(chess_board)
 
-    if self.isTerminal(board, player, opponent, depth+1):
-        return self.eval(board, player, maxTurn, opponent)
-        #return self.greedy_eval(board, player, opponent)
+        # Order moves at the root using a one-ply heuristic.
+        ordered_moves = self.order_moves(chess_board, legal_moves, player, opponent)
 
-    if maxTurn: 
-        max_eval = -float('inf')
-        for move in get_valid_moves(board, player):
-            new_board = deepcopy(board)
+        best_score = -math.inf
+        best_moves: List[MoveCoordinates] = []
+
+        for move in ordered_moves:
+            new_board = chess_board.copy()
             execute_move(new_board, move, player)
-            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, False)
-            max_eval = max(max_eval, eval_score)
-            alpha = max(alpha, eval_score)
-            if beta <= alpha:
-                break 
-        return max_eval
-    
-    else: 
-        min_eval = float('inf')
-        for move in get_valid_moves(board, opponent):
-            new_board = deepcopy(board)
-            execute_move(new_board, move, opponent)
-            eval_score = self.minimax(new_board, depth+1, alpha, beta, player, opponent, True)
-            min_eval = min(min_eval, eval_score)
-            beta = min(beta, eval_score)
-            if beta <= alpha:
-                break 
-        return min_eval
-  
-  def isTerminal(self, board : np.ndarray, player : int, opponent : int, depth : int) -> bool:
-    '''
-    Check if the game has reached a terminal state or maximum depth.
-    '''
-    if depth >= MAXDEPTH:
-        return True
-    if check_endgame(board) != None:
-        return True
-    return False
-    
-  
-  def eval(self, board : np.ndarray, color : int, maxTurn : bool, opponent : int) -> float:
-    '''
-    Evaluation function to assess board state. Returns a score for the given move.
-    '''
-    # Simple evaluation function: difference in number of pieces
-    # This is taken from greedy_corners_agent.py 
-    if opponent == 1:
-      player = 2
-    else:
-       player = 1
 
-    if maxTurn: 
-       player_count = np.count_nonzero(board == player)
-       opp_count = np.count_nonzero(board == opponent)
-       opp_moves = len(get_valid_moves(board, opponent))
-       hole_penalty = self.hole_penalty(board, player, opponent)
-       pos_score = self.positional_score(board, player, opponent)
-    else: 
-       opp_count = np.count_nonzero(board == player)
-       opp_moves = len(get_valid_moves(board, player))
-       player_count = np.count_nonzero(board == opponent)
-       hole_penalty = self.hole_penalty(board, opponent, player)
-       pos_score = self.positional_score(board, opponent, player)
+            score = self.minimax(
+                board=new_board,
+                depth=1,
+                max_depth=max_depth,
+                current_player=opponent,
+                root_player=player,
+                other_player=opponent,
+                alpha=-math.inf,
+                beta=math.inf,
+            )
 
+            if score > best_score:
+                best_score = score
+                best_moves = [move]
+            elif score == best_score:
+                best_moves.append(move)
 
-    # Add some score penalization for holes in position
-    # board[r][c] == 0 indicates empty square
+        return random.choice(best_moves)
 
-    # Score Difference
-    score_diff = player_count - opp_count
+    # ------------------------------------------------------------------
+    # Minimax with alpha–beta
+    # ------------------------------------------------------------------
+    def minimax(
+        self,
+        board: np.ndarray,
+        depth: int,
+        max_depth: int,
+        current_player: int,
+        root_player: int,
+        other_player: int,
+        alpha: float,
+        beta: float,
+    ) -> float:
+        # Terminal state?
+        endgame, p1_score, p2_score = check_endgame(board)
+        if endgame:
+            if root_player == 1:
+                diff = p1_score - p2_score
+            else:
+                diff = p2_score - p1_score
+            return diff * TERMINAL_SCORE_MULTIPLIER
 
-    # Hole Penalty
-    #hole_penalty = self.hole_penalty(board, color, opponent)
+        # Depth limit reached -> heuristic evaluation.
+        if depth >= max_depth:
+            return self.evaluate(board, root_player, other_player, depth, max_depth)
 
-    # Mobility Penalty 
-    mobility_penalty = -opp_moves
+        # Transposition table lookup.
+        depth_remaining = max_depth - depth
+        key = (board.tobytes(), current_player, depth_remaining, root_player)
+        cached = self.transposition_table.get(key)
+        if cached is not None:
+            return cached
 
-    # Positional Score
-    #pos_score = self.positional_score(board, color, opponent)
+        moves = get_valid_moves(board, current_player)
 
-    # Weights? change later? 
-    #w_score = 8.0
-    #w_hole = 0.25
-    #w_mobility = 3.0
-    #w_position = 2.0
+        # Handle "pass" when current_player has no moves.
+        if not moves:
+            next_player = 1 if current_player == 2 else 2
+            other_moves = get_valid_moves(board, next_player)
+            if not other_moves:
+                # No-one can move: static evaluation.
+                return self.evaluate(board, root_player, other_player, depth, max_depth)
+            return self.minimax(
+                board=board,
+                depth=depth + 1,
+                max_depth=max_depth,
+                current_player=next_player,
+                root_player=root_player,
+                other_player=other_player,
+                alpha=alpha,
+                beta=beta,
+            )
 
-    empty_count = np.count_nonzero(board == 0)
-    total = board.size
-    progress = 1 - (empty_count/total)  # 0 = start, 1 = end game
-    
-    # Dynamic weights across game phases
-    w_score     = 5.0 + 10.0*progress
-    w_mobility  = 5.0 - 3.5*progress
-    w_position  = 1.5 - 1.2*progress
-    w_hole      = 0.5 * (1 - progress)
+        maximizing = (current_player == root_player)
 
-    if opponent == 1: 
-      player = 2
-    else: 
-       player = 1
+        if maximizing:
+            value = -math.inf
+            ordered = self._order_child_moves(board, moves, current_player, other_player)
+            for move in ordered:
+                child_board = board.copy()
+                execute_move(child_board, move, current_player)
 
-    endgame, p1score, p2score = check_endgame(board)
+                value = max(
+                    value,
+                    self.minimax(
+                        board=child_board,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                        current_player=1 if current_player == 2 else 2,
+                        root_player=root_player,
+                        other_player=other_player,
+                        alpha=alpha,
+                        beta=beta,
+                    ),
+                )
+                alpha = max(alpha, value)
+                if alpha >= beta:
+                    break
+        else:
+            value = math.inf
+            ordered = self._order_child_moves(board, moves, current_player, other_player, reverse=True)
+            for move in ordered:
+                child_board = board.copy()
+                execute_move(child_board, move, current_player)
 
-    if endgame:
-       if p1score > p2score: 
-          if maxTurn and player == 1:
-             return 10000
-          if not maxTurn and opponent == 1:
-             return 10000
-          else: return -10000
-       else: 
-          if maxTurn and player == 2:
-             return 10000
-          if not maxTurn and opponent == 2:
-             return 10000
-          else: return -10000
+                value = min(
+                    value,
+                    self.minimax(
+                        board=child_board,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                        current_player=1 if current_player == 2 else 2,
+                        root_player=root_player,
+                        other_player=other_player,
+                        alpha=alpha,
+                        beta=beta,
+                    ),
+                )
+                beta = min(beta, value)
+                if alpha >= beta:
+                    break
 
+        # Store in cache and return.
+        self.transposition_table[key] = value
+        return value
 
-    # TODO: We can add more heuristics here, including a preference for corners, edges, etc.
-    # We may want to divide our eval function heuristics into separate functions for modularity
-    # TODO: Modify the weights as needed, this can be done after testing. 
-    return (w_score * score_diff) + (w_hole * hole_penalty) + (w_mobility * mobility_penalty) + (w_position * pos_score)
-  
-  def greedy_eval(self, board : np.ndarray, color: int, opponent: int) -> float:
-     return GreedyAgent().evaluate_board(board, color, opponent)
-  
-  def hole_penalty(self, board : np.ndarray, color : int, opponent : int) -> float:
-    '''
-    Calculate penalty for empty squares (holes) that are adjacent to opponent pieces. Returns score as a float. 
-    '''
+    # ------------------------------------------------------------------
+    # Move ordering
+    # ------------------------------------------------------------------
+    def order_moves(
+        self,
+        board: np.ndarray,
+        moves: List[MoveCoordinates],
+        player: int,
+        opponent: int,
+    ) -> List[MoveCoordinates]:
+        """
+        Order moves at the root using a one-ply heuristic.
+        """
+        scored: List[Tuple[float, MoveCoordinates]] = []
+        for move in moves:
+            temp = board.copy()
+            execute_move(temp, move, player)
+            score = self.evaluate(temp, player, opponent, depth=0, max_depth=1)
+            scored.append((score, move))
 
-    penalty = 0
-    n = board.shape[0]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [m for (_, m) in scored]
 
-    one_tile_dirs = get_directions() # Get all directions (8 directions: up, down, left, right, and diagonals), returns list of tuples
-    two_tile_dirs = get_two_tile_directions() # Get all 2-tile directions (16 directions), returns list of tuples
-    all_dirs = one_tile_dirs + two_tile_dirs
+    def _order_child_moves(
+        self,
+        board: np.ndarray,
+        moves: List[MoveCoordinates],
+        player: int,
+        opponent: int,
+        reverse: bool = False,
+    ) -> List[MoveCoordinates]:
+        """
+        Cheaper move ordering for internal nodes: prefer moves that
+        gain discs and move to corners / edges.
+        """
+        scored: List[Tuple[float, MoveCoordinates]] = []
+        n = board.shape[0]
 
-    for row in range(n):
-      for col in range(n):
-          
-          if board[row][col] != 0:
-              continue 
+        for move in moves:
+            src_r, src_c = move.get_src()
+            dst_r, dst_c = move.get_dest()
 
-          near_player = False
-          near_opp = False
+            # Positional bonus.
+            is_corner = (dst_r in (0, n - 1)) and (dst_c in (0, n - 1))
+            is_edge = (
+                (dst_r == 0 or dst_r == n - 1)
+                or (dst_c == 0 or dst_c == n - 1)
+            )
+            pos_bonus = 0.0
+            if is_corner:
+                pos_bonus = 3.0
+            elif is_edge:
+                pos_bonus = 1.0
 
-          for row_distance, col_distance in all_dirs: # For all direction vectors representing move
-              new_row, new_col = row + row_distance, col + col_distance 
-              if 0 <= new_row < n and 0 <= new_col < n: # As long as we are within bounds...
-                  if board[new_row][new_col] == color: 
-                      near_player = True
-                  elif board[new_row][new_col] == opponent:
-                      near_opp = True
+            # Local disc gain (approximate number of opponent discs flipped).
+            gain = 0
+            for dr, dc in self._neighbour_dirs:
+                rr, cc = dst_r + dr, dst_c + dc
+                if 0 <= rr < n and 0 <= cc < n:
+                    if board[rr, cc] == opponent:
+                        gain += 1
 
-          # TODO: I am not sure if this considers whose turn it is... might need to adjust
-          # I think this is fine, because we will only call this function in mimimax
-          if near_opp and not near_player: # If move is reachable by opponent but not by player
-              penalty += 1
+            # Jump vs duplication: jumps lose the source disc.
+            dist = max(abs(dst_r - src_r), abs(dst_c - src_c))
+            if dist == 2:
+                gain -= 1
 
-    return penalty
+            score = gain + pos_bonus
+            scored.append((score, move))
 
-  def positional_score(self, board, player, opponent):
-    player_positions = (board == player) # If the cell it taken by the player
-    opponent_positions = (board == opponent) # If the cell is taken by the opp
+        scored.sort(key=lambda x: x[0], reverse=not reverse)
+        return [m for (_, m) in scored]
 
-    player_pos = np.sum(POSITION_WEIGHTS[player_positions]) # Sum of all the positional weights of the player
-    opp_pos = np.sum(POSITION_WEIGHTS[opponent_positions]) # Sum of all the pos weights of the opp 
+    # ------------------------------------------------------------------
+    # Evaluation function and helpers
+    # ------------------------------------------------------------------
+    def evaluate(self, board, me, opp, depth, max_depth):
+        """
+        Fast + strong evaluation:
+        - disc difference
+        - light mobility (only for us, only shallow depth)
+        - light hole penalty (only shallow depth)
+        - positional weights
+        """
 
-    # Returns the difference: positive if player is in a stronger position and then negative if opponent is
-    return player_pos - opp_pos 
-  
+        # Disc difference
+        my_count = np.count_nonzero(board == me)
+        opp_count = np.count_nonzero(board == opp)
+        score_diff = my_count - opp_count
+
+        # Positional score (cheap)
+        pos_score = self.positional_score(board, me, opp)
+
+        # Mobility (expensive) → only compute near root
+        if depth <= 1:
+            my_moves = len(get_valid_moves(board, me))
+            mobility = my_moves
+        else:
+            mobility = 0
+
+        # Hole penalty (expensive) → only compute near root
+        if depth <= 1:
+            hole_pen = self.hole_penalty(board, me, opp)
+        else:
+            hole_pen = 0
+
+        # Game progress
+        #empty_count = np.count_nonzero(board == 0)
+        empty_count = board.shape[0] - (my_count + opp_count)
+        progress = 1.0 - (empty_count / board.size)
+
+        # Dynamic weights
+        w_score    = 5.0 + 10.0 * progress
+        w_mobility = 4.0 - 3.0 * progress
+        w_position = 2.0 - 1.5 * progress
+        w_hole     = 0.5 * (1.0 - progress)
+
+        value = (
+            w_score * score_diff +
+            w_mobility * mobility +
+            w_position * pos_score -
+            w_hole * hole_pen
+        )
+
+        # Slight horizon factor
+        return value * (1.0 + 0.03 * (depth / max_depth))
+
+    def hole_penalty(self, board: np.ndarray, color: int, opponent: int) -> float:
+        """
+        Penalty for empty squares that are good for opponent:
+        they are near opponent discs but not near our discs.
+        """
+        penalty = 0.0
+        n = board.shape[0]
+
+        one_tile_dirs = get_directions()
+        two_tile_dirs = get_two_tile_directions()
+        all_dirs = one_tile_dirs + two_tile_dirs
+
+        for row in range(n):
+            for col in range(n):
+                if board[row, col] != 0:
+                    continue  # only consider empty squares
+
+                near_player = False
+                near_opp = False
+
+                for dr, dc in all_dirs:
+                    nr, nc = row + dr, col + dc
+                    if 0 <= nr < n and 0 <= nc < n:
+                        if board[nr, nc] == color:
+                            near_player = True
+                        elif board[nr, nc] == opponent:
+                            near_opp = True
+
+                if near_opp and not near_player:
+                    penalty += 1.0
+
+        return penalty
+
+    def positional_score(self, board: np.ndarray, player: int, opponent: int) -> float:
+        """
+        Positional score based on POSITION_WEIGHTS.
+        Positive if `player` is better placed than `opponent`.
+        """
+        n = board.shape[0]
+        if n == 7:
+            weights = POSITION_WEIGHTS
+        else:
+            weights = self._resize_pos_weights(POSITION_WEIGHTS, n)
+
+        player_positions = (board == player)
+        opponent_positions = (board == opponent)
+
+        player_pos = float(np.sum(weights[player_positions]))
+        opp_pos = float(np.sum(weights[opponent_positions]))
+
+        return player_pos - opp_pos
+
+    def _resize_pos_weights(self, base: np.ndarray, n: int) -> np.ndarray:
+        """
+        Resize the 7x7 positional weight matrix to n x n by centering
+        and padding with nearest edge values.
+        """
+        if n == base.shape[0]:
+            return base
+
+        resized = np.zeros((n, n), dtype=float)
+
+        min_n = min(n, base.shape[0])
+        start_src = (base.shape[0] - min_n) // 2
+        start_dst = (n - min_n) // 2
+
+        resized[start_dst:start_dst + min_n, start_dst:start_dst + min_n] = \
+            base[start_src:start_src + min_n, start_src:start_src + min_n]
+
+        # Edge padding.
+        resized[0, :] = resized[1, :]
+        resized[-1, :] = resized[-2, :]
+        resized[:, 0] = resized[:, 1]
+        resized[:, -1] = resized[:, -2]
+
+        return resized
+
+    def choose_search_depth(self, board: np.ndarray) -> int:
+        """
+        Pick a search depth based on how many empty squares remain.
+        We keep this slightly shallower than a super-deep search because the
+        heuristic is more expensive than a simple one.
+        """
+        empty_count = np.count_nonzero(board == 0)
+
+        if empty_count > 30:
+            # Very early game: branching factor is huge.
+            return BASE_MAX_DEPTH        # 3
+        elif empty_count > 10:
+            # Mid game.
+            return BASE_MAX_DEPTH - 1    # 4
+        else:
+            # Late game: fewer moves, can afford deeper search.
+            return BASE_MAX_DEPTH + 1    # 5
+
