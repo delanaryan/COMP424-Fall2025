@@ -82,7 +82,7 @@ class StudentAgent(Agent):
         time = 0 
  
         for move in ordered_moves:
-            if time <= 1.9:
+            if time <= 1.4:
                 new_board = chess_board.copy()
                 execute_move(new_board, move, player)
 
@@ -398,10 +398,10 @@ class StudentAgent(Agent):
         """
         empty_count = np.count_nonzero(board == 0)
 
-        if empty_count > 30:
+        if empty_count > 20:
             # Very early game: branching factor is huge.
             return BASE_MAX_DEPTH        # 3
-        elif empty_count > 10:
+        elif empty_count > 8:
             # Mid game.
             return BASE_MAX_DEPTH - 1    # 4
         else:
