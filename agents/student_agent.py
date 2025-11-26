@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from timeit import default_timer as timer
 from typing import Dict, Tuple, List
 
 import numpy as np
@@ -64,8 +65,10 @@ class StudentAgent(Agent):
         # Clear cache for this move.
         #self.transposition_table.clear()
 
+        start = timer()
+
         legal_moves = get_valid_moves(chess_board, player)
-        if not legal_moves:
+        if not legal_moves: 
             raise RuntimeError("StudentAgent.step called with no legal moves.")
 
         max_depth = self.choose_search_depth(chess_board)
@@ -76,26 +79,32 @@ class StudentAgent(Agent):
         best_score = -math.inf
         best_moves: List[MoveCoordinates] = []
 
+        time = 0 
+ 
         for move in ordered_moves:
-            new_board = chess_board.copy()
-            execute_move(new_board, move, player)
+            if time <= 1.9:
+                new_board = chess_board.copy()
+                execute_move(new_board, move, player)
 
-            score = self.minimax(
-                board=new_board,
-                depth=1,
-                max_depth=max_depth,
-                current_player=opponent,
-                root_player=player,
-                other_player=opponent,
-                alpha=-math.inf,
-                beta=math.inf,
-            )
+                score = self.minimax(
+                    board=new_board,
+                    depth=1,
+                    max_depth=max_depth,
+                    current_player=opponent,
+                    root_player=player,
+                    other_player=opponent,
+                    alpha=-math.inf,
+                    beta=math.inf,
+                )
 
-            if score > best_score:
-                best_score = score
-                best_moves = [move]
-            elif score == best_score:
-                best_moves.append(move)
+                if score > best_score:
+                    best_score = score
+                    best_moves = [move]
+                elif score == best_score:
+                    best_moves.append(move)
+
+                end = timer()
+                time = end - start
 
         return random.choice(best_moves)
 
@@ -113,6 +122,7 @@ class StudentAgent(Agent):
         alpha: float,
         beta: float,
     ) -> float:
+        time = timer()
         # Terminal state?
         endgame, p1_score, p2_score = check_endgame(board)
         if endgame:
@@ -125,7 +135,7 @@ class StudentAgent(Agent):
         # Depth limit reached -> heuristic evaluation.
         if depth >= max_depth:
             return self.evaluate(board, root_player, other_player, depth, max_depth)
-
+        
         # Transposition table lookup.
         depth_remaining = max_depth - depth
         key = (board.tobytes(), current_player, depth_remaining, root_player)
