@@ -1,21 +1,20 @@
 # Authors: Delana Ryan, Bailey Corriveau, Yuna Ruel
+
+# Added imports
 import math
-import random
 from timeit import default_timer as timer
 from typing import Dict, Tuple, List
 
-import numpy as np
-
+# Given imports
+import random
 from agents.agent import Agent
+import copy
 from store import register_agent
-from helpers import (
-    get_valid_moves,
-    execute_move,
-    check_endgame,
-    get_directions,
-    MoveCoordinates,
-    get_two_tile_directions,
-)
+import sys
+import numpy as np
+from copy import deepcopy
+import time
+from helpers import random_move, execute_move, check_endgame, get_valid_moves, get_directions, get_two_tile_directions, MoveCoordinates
 
 # Base depth; we adapt this depending on how many empty squares remain.
 BASE_MAX_DEPTH = 3
@@ -31,7 +30,6 @@ POSITION_WEIGHTS = np.array([
     [-2, -3, -1, -1, -1, -3, -2],
     [ 3, -2,  1,  1,  1, -2,  3],
 ], dtype=float)
-
 
 @register_agent("student_agent")
 class StudentAgent(Agent):
