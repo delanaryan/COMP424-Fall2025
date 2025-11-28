@@ -247,17 +247,16 @@ class StudentAgent(Agent):
         gain discs and move to corners / edges.
         """
         scored: List[Tuple[float, MoveCoordinates]] = []
-        n = board.shape[0]
 
         for move in moves:
             src_r, src_c = move.get_src()
             dst_r, dst_c = move.get_dest()
 
             # Positional bonus.
-            is_corner = (dst_r in (0, n - 1)) and (dst_c in (0, n - 1))
+            is_corner = (dst_r in (0, 6)) and (dst_c in (0, 6))
             is_edge = (
-                (dst_r == 0 or dst_r == n - 1)
-                or (dst_c == 0 or dst_c == n - 1)
+                (dst_r == 0 or dst_r == 6)
+                or (dst_c == 0 or dst_c == 6)
             )
             pos_bonus = 0.0
             if is_corner:
@@ -269,7 +268,7 @@ class StudentAgent(Agent):
             gain = 0
             for dr, dc in self._neighbour_dirs:
                 rr, cc = dst_r + dr, dst_c + dc
-                if 0 <= rr < n and 0 <= cc < n:
+                if 0 <= rr < 7 and 0 <= cc < 7: # board = 7x7
                     if board[rr, cc] == opponent:
                         gain += 1
 
@@ -343,14 +342,13 @@ class StudentAgent(Agent):
         they are near opponent discs but not near our discs.
         """
         penalty = 0.0
-        n = board.shape[0]
 
         one_tile_dirs = get_directions()
         two_tile_dirs = get_two_tile_directions()
         all_dirs = one_tile_dirs + two_tile_dirs
 
-        for row in range(n):
-            for col in range(n):
+        for row in range(7): # board = 7x7
+            for col in range(7): # board = 7x7
                 if board[row, col] != 0:
                     continue  # only consider empty squares
 
@@ -359,8 +357,8 @@ class StudentAgent(Agent):
 
                 for dr, dc in all_dirs:
                     nr, nc = row + dr, col + dc
-                    if 0 <= nr < n and 0 <= nc < n:
-                        if board[nr, nc] == color:
+                    if 0 <= nr < 7 and 0 <= nc < 7: # board = 7x7
+                        if board[nr, nc] == color: 
                             near_player = True
                         elif board[nr, nc] == opponent:
                             near_opp = True
