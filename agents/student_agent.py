@@ -1,7 +1,4 @@
 # Authors: Delana Ryan, Bailey Corriveau, Yuna Ruel
-
-from __future__ import annotations
-
 import math
 import random
 from timeit import default_timer as timer
