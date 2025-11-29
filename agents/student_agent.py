@@ -31,6 +31,7 @@ BIGX_WEIGHTS = np.array([
     [ 3, -2,  1,  1,  1, -2,  3],
 ], dtype=float)
 
+# watch_the_sides uses this too
 EMPTY_WEIGHTS = np.array([
     [ 3, -2,  1,  1,  1, -2,  3],
     [-2, -3, -1, -1, -1, -3, -2],
@@ -52,13 +53,13 @@ PLUSONE_WEIGHTS = np.array([
 ], dtype=float)
 
 PLUSTWO_WEIGHTS = np.array([
-    [ 3, -2,  1,  1,  1, -2,  3],
-    [-2, -1, -1, -3, -1, -1, -2],
-    [ 1, -1, -1, -3, -1, -1,  1],
-    [ 1, -3, -3,  0, -3, -3,  1],
-    [ 1, -1, -1, -3, -1, -1,  1],
-    [-2, -1, -1, -3, -1, -1, -2],
-    [ 3, -2,  1,  1,  1, -2,  3],
+    [ 3, -1,  1,  1,  1, -1,  3],
+    [-1,  1,  1, -1,  1,  1, -1],
+    [ 1,  1,  2,  0,  2,  1,  1],
+    [ 1, -1,  0,  2,  0, -1,  1],
+    [ 1,  1,  2,  0,  2,  1,  1],
+    [-1,  1,  1, -1,  1,  1, -1],
+    [ 3, -1,  1,  1,  1, -1,  3],
 ], dtype=float)
 
 POINTFOUR_WEIGHTS = np.array([
@@ -72,13 +73,13 @@ POINTFOUR_WEIGHTS = np.array([
 ], dtype=float)
 
 CIRCLE_WEIGHTS = np.array([
-    [ 3, -2,  1,  1,  1, -2,  3],
-    [-2,  1, -3,  0, -3,  1, -2],
-    [ 1, -3,  1,  0,  1, -3,  1],
-    [ 1,  0,  0,  3,  0,  0,  1],
-    [ 1, -3,  1,  0,  1, -3,  1],
-    [-2,  1, -3,  0, -3,  1, -2],
-    [ 3, -2,  1,  1,  1, -2,  3],
+    [ 3, -1,  0,  1,  0, -1,  3],
+    [-1,  1,  0,  2,  0,  1, -1],
+    [ 0,  0,  2,  3,  2,  0,  0],
+    [ 1,  2,  3,  3,  3,  2,  1],
+    [ 0,  0,  2,  3,  2,  0,  0],
+    [-1,  1,  0,  2,  0,  1, -1],
+    [ 3, -1,  0,  1,  0, -1,  3],
 ], dtype=float)
 
 WALL_WEIGHTS = np.array([
@@ -89,16 +90,6 @@ WALL_WEIGHTS = np.array([
     [ 1,  2,  3, -1,  3,  2,  1],
     [ 1,  2,  2, -2,  2,  2,  1],
     [ 3,  1,  1, -2,  1,  1,  3],
-], dtype=float)
-
-SIDES_WEIGHTS = np.array([
-    [ 3,  0, -3,  1, -3,  0,  3],
-    [ 0,  0,  0,  1,  0,  0,  0],
-    [-3,  0,  1,  3,  1,  0, -3],
-    [ 1,  1,  3,  3,  3,  1,  1],
-    [-3,  0,  1,  3,  1,  0, -3],
-    [ 0,  0,  0,  1,  0,  0,  0],
-    [ 3,  0, -3,  1, -3,  0,  3],
 ], dtype=float)
 
 @register_agent("student_agent")
@@ -118,7 +109,6 @@ class StudentAgent(Agent):
         self.name = "StudentAgent"
 
         self.first_move = True
-        self.board_type = 2 
         self.weights = EMPTY_WEIGHTS
 
         # transposition table: state -> value
@@ -493,7 +483,5 @@ class StudentAgent(Agent):
                 self.weights = POINTFOUR_WEIGHTS
         elif board[1, 2] == 3:
             self.weights = CIRCLE_WEIGHTS
-        elif board[0, 2] == 3:
-            self.weights = SIDES_WEIGHTS
         else: 
             self.weights = EMPTY_WEIGHTS
