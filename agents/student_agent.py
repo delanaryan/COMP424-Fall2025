@@ -137,8 +137,7 @@ class StudentAgent(Agent):
         start = timer()
 
         if self.first_move:
-            self.board_type = self.which_board(chess_board)
-            self.assign_weights()
+            self.assign_weights(chess_board)
             self.first_move = False
 
         legal_moves = get_valid_moves(chess_board, player)
@@ -478,41 +477,23 @@ class StudentAgent(Agent):
             # Late game: fewer moves, can afford deeper search.
             return BASE_MAX_DEPTH + 1    # 5
 
-    def which_board(self, board: np.ndarray) -> int:
+    def assign_weights(self, board: np.ndarray):
         if board[2, 3] == 3:
             if board[1, 3] == 3:
                 if board[0, 3] == 3:
-                    return 7
+                    self.weights = WALL_WEIGHTS
                 else: 
-                    return 4
+                    self.weights = PLUSTWO_WEIGHTS
             else:
-                return 3
+                self.weights = PLUSONE_WEIGHTS
         elif board[2, 2] == 3:
             if board[1, 1] == 3:
-                return 1
+                self.weights = BIGX_WEIGHTS
             else: 
-                return 5
+                self.weights = POINTFOUR_WEIGHTS
         elif board[1, 2] == 3:
-            return 6
-        elif board[0, 2] == 3:
-            return 8
-        else: 
-            return 2
-
-    def assign_weights(self):
-        if self.board_type == 1:
-            self.weights = BIGX_WEIGHTS
-        elif self.board_type == 2:
-            self.weights = EMPTY_WEIGHTS
-        elif self.board_type == 3:
-            self.weights = PLUSONE_WEIGHTS
-        elif self.board_type == 4:
-            self.weights = PLUSTWO_WEIGHTS
-        elif self.board_type == 5:
-            self.weights = POINTFOUR_WEIGHTS
-        elif self.board_type == 6:
             self.weights = CIRCLE_WEIGHTS
-        elif self.board_type == 7:
-            self.weights = WALL_WEIGHTS
-        elif self.board_type == 8:
+        elif board[0, 2] == 3:
             self.weights = SIDES_WEIGHTS
+        else: 
+            self.weights = EMPTY_WEIGHTS
