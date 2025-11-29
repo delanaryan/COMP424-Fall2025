@@ -20,8 +20,19 @@ from helpers import random_move, execute_move, check_endgame, get_valid_moves, g
 BASE_MAX_DEPTH = 3
 TERMINAL_SCORE_MULTIPLIER = 1000
 
-# Positional weights matrix (borrowed / adapted from original student_agent)
-POSITION_WEIGHTS = np.array([
+# Positional weights matrix's, hardcoded for each board.
+BIGX_WEIGHTS = np.array([
+    [ 3, -2,  1,  1,  1, -2,  3],
+    [-2, -3, -1, -1, -1, -3, -2],
+    [ 1, -1, -3, -1, -3, -1,  1],
+    [ 1, -1, -1,  3, -1, -1,  1],
+    [ 1, -1, -3, -1, -3, -1,  1],
+    [-2, -3, -1, -1, -1, -3, -2],
+    [ 3, -2,  1,  1,  1, -2,  3],
+], dtype=float)
+
+# watch_the_sides uses this too
+EMPTY_WEIGHTS = np.array([
     [ 3, -2,  1,  1,  1, -2,  3],
     [-2, -3, -1, -1, -1, -3, -2],
     [ 1, -1,  1,  0,  1, -1,  1],
@@ -31,13 +42,63 @@ POSITION_WEIGHTS = np.array([
     [ 3, -2,  1,  1,  1, -2,  3],
 ], dtype=float)
 
+PLUSONE_WEIGHTS = np.array([
+    [ 3, -2,  1,  1,  1, -2,  3],
+    [-2, -1,  0, -1,  0, -1, -2],
+    [ 1,  0, -1, -3, -1,  0,  1],
+    [ 1, -1, -3,  0, -3, -1,  1],
+    [ 1,  0, -1, -3, -1,  0,  1],
+    [-2, -1,  0, -1,  0, -1, -2],
+    [ 3, -2,  1,  1,  1, -2,  3],
+], dtype=float)
+
+PLUSTWO_WEIGHTS = np.array([
+    [ 3, -1,  1,  1,  1, -1,  3],
+    [-1,  1,  1, -1,  1,  1, -1],
+    [ 1,  1,  2,  0,  2,  1,  1],
+    [ 1, -1,  0,  2,  0, -1,  1],
+    [ 1,  1,  2,  0,  2,  1,  1],
+    [-1,  1,  1, -1,  1,  1, -1],
+    [ 3, -1,  1,  1,  1, -1,  3],
+], dtype=float)
+
+POINTFOUR_WEIGHTS = np.array([
+    [ 3, -2,  1,  1,  1, -2,  3],
+    [-2, -1,  0,  0,  0, -1, -2],
+    [ 1,  0, -3,  0, -3,  0,  1],
+    [ 1,  0,  0,  3,  0,  0,  1],
+    [ 1,  0, -3,  0, -3,  0,  1],
+    [-2, -1,  0,  0,  0, -1, -2],
+    [ 3, -2,  1,  1,  1, -2,  3],
+], dtype=float)
+
+CIRCLE_WEIGHTS = np.array([
+    [ 3, -1,  0,  1,  0, -1,  3],
+    [-1,  1,  0,  2,  0,  1, -1],
+    [ 0,  0,  2,  3,  2,  0,  0],
+    [ 1,  2,  3,  3,  3,  2,  1],
+    [ 0,  0,  2,  3,  2,  0,  0],
+    [-1,  1,  0,  2,  0,  1, -1],
+    [ 3, -1,  0,  1,  0, -1,  3],
+], dtype=float)
+
+WALL_WEIGHTS = np.array([
+    [ 3,  1,  1, -2,  1,  1,  3],
+    [ 1,  2,  2, -2,  2,  2,  1],
+    [ 1,  2,  3, -1,  3,  2,  1],
+    [-2, -2, -1,  0, -1, -2, -2],
+    [ 1,  2,  3, -1,  3,  2,  1],
+    [ 1,  2,  2, -2,  2,  2,  1],
+    [ 3,  1,  1, -2,  1,  1,  3],
+], dtype=float)
+
 @register_agent("student_agent")
 class StudentAgent(Agent):
     """
     Strong search-based Ataxx agent.
 
     This version combines:
-    - minimax + alpha–beta
+    - minimax + alpha-beta
     - a transposition table for caching
     - move ordering
     - a rich heuristic (piece count, mobility, hole penalty, positional weights)
@@ -46,6 +107,9 @@ class StudentAgent(Agent):
     def __init__(self) -> None:
         super().__init__()
         self.name = "StudentAgent"
+
+        self.first_move = True
+        self.weights = EMPTY_WEIGHTS
 
         # transposition table: state -> value
         self.transposition_table: Dict[Tuple[bytes, int, int, int], float] = {}
@@ -61,6 +125,10 @@ class StudentAgent(Agent):
         #self.transposition_table.clear()
 
         start = timer()
+
+        if self.first_move:
+            self.assign_weights(chess_board)
+            self.first_move = False
 
         legal_moves = get_valid_moves(chess_board, player)
         if not legal_moves: 
@@ -373,13 +441,11 @@ class StudentAgent(Agent):
         Positional score based on POSITION_WEIGHTS.
         Positive if `player` is better placed than `opponent`.
         """
-        weights = POSITION_WEIGHTS
-
         player_positions = (board == player)
         opponent_positions = (board == opponent)
 
-        player_pos = float(np.sum(weights[player_positions]))
-        opp_pos = float(np.sum(weights[opponent_positions]))
+        player_pos = float(np.sum(self.weights[player_positions]))
+        opp_pos = float(np.sum(self.weights[opponent_positions]))
 
         return player_pos - opp_pos
 
@@ -400,3 +466,22 @@ class StudentAgent(Agent):
         else:
             # Late game: fewer moves, can afford deeper search.
             return BASE_MAX_DEPTH + 1    # 5
+
+    def assign_weights(self, board: np.ndarray):
+        if board[2, 3] == 3:
+            if board[1, 3] == 3:
+                if board[0, 3] == 3:
+                    self.weights = WALL_WEIGHTS
+                else: 
+                    self.weights = PLUSTWO_WEIGHTS
+            else:
+                self.weights = PLUSONE_WEIGHTS
+        elif board[2, 2] == 3:
+            if board[1, 1] == 3:
+                self.weights = BIGX_WEIGHTS
+            else: 
+                self.weights = POINTFOUR_WEIGHTS
+        elif board[1, 2] == 3:
+            self.weights = CIRCLE_WEIGHTS
+        else: 
+            self.weights = EMPTY_WEIGHTS
