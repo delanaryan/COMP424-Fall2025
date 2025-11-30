@@ -121,11 +121,10 @@ class StudentAgent(Agent):
     # Entry point called by the framework
     # ------------------------------------------------------------------
     def step(self, chess_board: np.ndarray, player: int, opponent: int):
-        # Clear cache for this move.
-        #self.transposition_table.clear()
 
-        start = timer()
+        start = timer() # Timer so as to not go over time limit. 
 
+        # Check to assign board positional weights (only needs to be done on the first move.)
         if self.first_move:
             self.assign_weights(chess_board)
             self.first_move = False
@@ -134,6 +133,7 @@ class StudentAgent(Agent):
         if not legal_moves: 
             raise RuntimeError("StudentAgent.step called with no legal moves.")
 
+        # Dynamically update the search depth to minimize search time when the branching factor is large. 
         max_depth = self.choose_search_depth(chess_board)
 
         # Order moves at the root using a one-ply heuristic.
@@ -145,7 +145,7 @@ class StudentAgent(Agent):
         time = 0 
  
         for move in ordered_moves:
-            if time <= 1.4:
+            if time <= 1.4: # Keep buffer time, since minimax is recursive we can't reliable say it will take less than 0.6 seconds.
                 new_board = chess_board.copy()
                 execute_move(new_board, move, player)
 
@@ -169,7 +169,7 @@ class StudentAgent(Agent):
                 end = timer()
                 time = end - start
 
-        return random.choice(best_moves)
+        return random.choice(best_moves) # Return random best move if there are ties, or if the times runs out. 
 
     # ------------------------------------------------------------------
     # Minimax with alpha–beta
@@ -228,8 +228,10 @@ class StudentAgent(Agent):
 
         maximizing = (current_player == root_player)
 
+        # Alpha-Beta search
         if maximizing:
             value = -math.inf
+            # Order moves to explore most promising looking moves first.
             ordered = self._order_child_moves(board, moves, current_player, other_player)
             for move in ordered:
                 child_board = board.copy()
@@ -241,7 +243,7 @@ class StudentAgent(Agent):
                         board=child_board,
                         depth=depth + 1,
                         max_depth=max_depth,
-                        current_player=1 if current_player == 2 else 2,
+                        current_player=1 if current_player == 2 else 2, # Swap current player in next call.
                         root_player=root_player,
                         other_player=other_player,
                         alpha=alpha,
@@ -253,6 +255,7 @@ class StudentAgent(Agent):
                     break
         else:
             value = math.inf
+            # Order moves
             ordered = self._order_child_moves(board, moves, current_player, other_player, reverse=True)
             for move in ordered:
                 child_board = board.copy()
@@ -296,11 +299,11 @@ class StudentAgent(Agent):
         for move in moves:
             temp = board.copy()
             execute_move(temp, move, player)
-            score = self.evaluate(temp, player, opponent, depth=0, max_depth=1)
+            score = self.evaluate(temp, player, opponent, depth=0, max_depth=1) # Evaluate board after one move according to heuristic.
             scored.append((score, move))
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [m for (_, m) in scored]
+        scored.sort(key=lambda x: x[0], reverse=True) # Sort moves by heuristic score in descending order.
+        return [m for (_, m) in scored] # Return only the moves, discarding scores.
 
     def _order_child_moves(
         self,
