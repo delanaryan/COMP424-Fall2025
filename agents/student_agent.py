@@ -473,6 +473,10 @@ class StudentAgent(Agent):
             return BASE_MAX_DEPTH + 1    # 5
 
     def assign_weights(self, board: np.ndarray):
+        """
+        Assigns the board weights based on the board being played. 
+        Gives empty weights if it is an unknown 7x7 board. 
+        """
         if board[2, 3] == 3:
             if board[1, 3] == 3:
                 if board[0, 3] == 3:
