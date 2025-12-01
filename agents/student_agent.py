@@ -141,33 +141,35 @@ class StudentAgent(Agent):
 
         best_score = -math.inf
         best_moves: List[MoveCoordinates] = []
-
-        time = 0 
  
         for move in ordered_moves:
-            if time <= 1.4: # Keep buffer time, since minimax is recursive we can't reliable say it will take less than 0.6 seconds.
-                new_board = chess_board.copy()
-                execute_move(new_board, move, player)
 
-                score = self.minimax(
-                    board=new_board,
-                    depth=1,
-                    max_depth=max_depth,
-                    current_player=opponent,
-                    root_player=player,
-                    other_player=opponent,
-                    alpha=-math.inf,
-                    beta=math.inf,
-                )
+            if timer() - start >= 1.32:
+                break
 
-                if score > best_score:
-                    best_score = score
-                    best_moves = [move]
-                elif score == best_score:
-                    best_moves.append(move)
+            # Keep buffer time, since minimax is recursive we can't reliable say it will take less than 0.6 seconds.
+            new_board = chess_board.copy()
+            execute_move(new_board, move, player)
 
-                end = timer()
-                time = end - start
+            score = self.minimax(
+                board=new_board,
+                depth=1,
+                max_depth=max_depth,
+                current_player=opponent,
+                root_player=player,
+                other_player=opponent,
+                alpha=-math.inf,
+                beta=math.inf,
+            )
+
+            if score > best_score:
+                best_score = score
+                best_moves = [move]
+            elif score == best_score:
+                best_moves.append(move)
+
+        if len(best_moves) == 0: # If we haven't found a move for some reason, take the most promising move
+            return ordered_moves[0]
 
         return random.choice(best_moves) # Return random best move if there are ties, or if the times runs out. 
 
@@ -465,7 +467,7 @@ class StudentAgent(Agent):
             return BASE_MAX_DEPTH        # 3
         elif empty_count > 8:
             # Mid game.
-            return BASE_MAX_DEPTH - 1    # 4
+            return BASE_MAX_DEPTH - 1    # 2
         else:
             # Late game: fewer moves, can afford deeper search.
             return BASE_MAX_DEPTH + 1    # 5
