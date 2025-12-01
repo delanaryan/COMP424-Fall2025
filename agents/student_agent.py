@@ -144,7 +144,7 @@ class StudentAgent(Agent):
  
         for move in ordered_moves:
 
-            if timer() - start >= 1.4:
+            if timer() - start >= 1.32:
                 break
 
             # Keep buffer time, since minimax is recursive we can't reliable say it will take less than 0.6 seconds.
@@ -167,6 +167,9 @@ class StudentAgent(Agent):
                 best_moves = [move]
             elif score == best_score:
                 best_moves.append(move)
+
+        if len(best_moves) == 0: # If we haven't found a move for some reason, take the most promising move
+            return ordered_moves[0]
 
         return random.choice(best_moves) # Return random best move if there are ties, or if the times runs out. 
 
@@ -464,7 +467,7 @@ class StudentAgent(Agent):
             return BASE_MAX_DEPTH        # 3
         elif empty_count > 8:
             # Mid game.
-            return BASE_MAX_DEPTH - 1    # 4
+            return BASE_MAX_DEPTH - 1    # 2
         else:
             # Late game: fewer moves, can afford deeper search.
             return BASE_MAX_DEPTH + 1    # 5
